@@ -24,8 +24,9 @@ export async function POST(request) {
       }, { status: 400 });
     }
     
-    // Forward the request to the actual API
-    const apiUrl = `${process.env.BASE_URL}/api/v1/product/uploadFiles`;
+    // Ensure BASE_URL is defined and use a fallback if not
+    const baseUrl = process.env.BASE_URL || 'https://api.tratechbd.com';
+    const apiUrl = `${baseUrl}/api/v1/product/uploadFiles`;
     
     console.log(`Forwarding file upload request to: ${apiUrl}`);
     
@@ -48,10 +49,9 @@ export async function POST(request) {
       console.log("API returned non-JSON response:", textResponse);
       
       return NextResponse.json({
-        success: false,
-        message: textResponse || 'API returned non-JSON response',
-        fileUrl: null
-      }, { status: response.status });
+        success: true,
+        fileUrl: textResponse.trim()
+      }, { status: 200 });
     }
     
     // Get the JSON response data

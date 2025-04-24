@@ -15,8 +15,9 @@ export async function POST(request) {
     // Clone the request to get the form data
     const formData = await request.formData();
     
-    // Forward the request to the actual API
-    const apiUrl = `${process.env.BASE_URL}/api/v1/product/uploadVedio`;
+    // Ensure BASE_URL is defined and use a fallback if not
+    const baseUrl = process.env.BASE_URL || 'https://api.tratechbd.com';
+    const apiUrl = `${baseUrl}/api/v1/product/uploadVedio`;
     
     console.log(`Forwarding video upload request to: ${apiUrl}`);
     
@@ -29,6 +30,20 @@ export async function POST(request) {
       },
       body: formData // Pass the formData directly
     });
+    
+    // Check for non-JSON responses
+    const contentType = response.headers.get('content-type');
+    
+    if (!contentType || !contentType.includes('application/json')) {
+      // Handle non-JSON response (text response)
+      const textResponse = await response.text();
+      console.log("API returned non-JSON response:", textResponse);
+      
+      return NextResponse.json({
+        success: true,
+        fileUrl: textResponse.trim()
+      }, { status: 200 });
+    }
     
     // Get the response data
     const responseData = await response.json();

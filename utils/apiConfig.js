@@ -12,7 +12,8 @@ export const getApiBaseUrl = () => {
   // For client-side code in production
   if (typeof window !== 'undefined') {
     // If we're on the production domain
-    if (window.location.hostname.includes('vercel.app')) {
+    if (window.location.hostname.includes('vercel.app') || 
+        window.location.hostname.includes('tratechbd.com')) {
       return 'https://api.tratechbd.com';
     }
     // For local development
@@ -33,6 +34,8 @@ export const getApiUrl = (endpoint) => {
 // Specific API endpoints
 export const API_ENDPOINTS = {
   UPLOAD_PRODUCT_IMAGE: '/api/v1/product/uploadImage',
+  UPLOAD_PRODUCT_VIDEO: '/api/v1/product/uploadVedio',
+  UPLOAD_PRODUCT_FILES: '/api/v1/product/uploadFiles',
   GET_PRODUCTS: '/api/v1/products',
   GET_PRODUCT: (id) => `/api/v1/products/${id}`,
   CREATE_PRODUCT: '/api/v1/products',

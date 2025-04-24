@@ -20,17 +20,26 @@ export default function AdminProducts() {
   const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(10)
+  const [itemsPerPage, setItemsPerPage] = useState(() => {
+    // Try to get stored preference from localStorage, default to 10 if not found
+    if (typeof window !== 'undefined') {
+      const storedValue = localStorage.getItem('productsPerPage');
+      return storedValue ? parseInt(storedValue, 10) : 10;
+    }
+    return 10; // Default for server-side rendering
+  })
   const [sortField, setSortField] = useState("productName")
   const [sortDirection, setSortDirection] = useState("asc")
   const [selectedProducts, setSelectedProducts] = useState([])
   const [selectAll, setSelectAll] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [totalItems, setTotalItems] = useState(0)
   const { getAuthToken } = useAuth()
   
   // Process API response into proper product data
   const processProductData = (apiData, categoriesData) => {
     if (!apiData?.data?.result || !Array.isArray(apiData.data.result)) {
+      console.log("No result array found in API data:", apiData);
       return [];
     }
     
@@ -47,8 +56,9 @@ export default function AdminProducts() {
         ...product,
         // Replace blob URLs with placeholder
         thumbnail: isValidImageSource(product.thumbnail) ? product.thumbnail : "/placeholder.svg",
-        // Get actual category name from our fetched categories
-        categoryName: categoryMap[product.categoryId] || `Category ${product.categoryId}`
+        // Get actual category name from our fetched categories if needed
+        // The API response already includes categoryName, so we might not need this
+        categoryName: product.categoryName || categoryMap[product.categoryId] || `Category ${product.categoryId}`
       };
     });
   };
@@ -57,7 +67,15 @@ export default function AdminProducts() {
     fetchCategories().then(() => {
       fetchProducts();
     });
-  }, [])
+    
+    // Debug pagination values
+    console.log({
+      currentPage,
+      totalItems,
+      totalPages,
+      itemsPerPage
+    });
+  }, [currentPage, sortField, sortDirection, searchTerm, itemsPerPage]); // Added itemsPerPage
 
   // Fetch categories from API
   const fetchCategories = async () => {
@@ -91,18 +109,39 @@ export default function AdminProducts() {
     }
   }
 
-  // Fetch products from API
+  // Fetch products from API with pagination parameters
   const fetchProducts = async () => {
     try {
       setLoading(true)
       setError(null)
+      setSelectedProducts([])
+      setSelectAll(false)
 
       const token = getAuthToken()
       if (!token) {
         throw new Error("Authentication token is missing")
       }
 
-      const response = await fetch("/api/proxy/api/v1/product", {
+      // Construct the API URL with pagination and sorting parameters
+      let apiUrl = `/api/proxy/api/v1/product?page=${currentPage}`;
+      // Only add the limit if we need to override the API default
+      if (itemsPerPage !== 100) { // Assuming 100 is the API default
+        apiUrl += `&limit=${itemsPerPage}`;
+      }
+      
+      // Add sorting parameters if they exist
+      if (sortField) {
+        apiUrl += `&sortBy=${sortField}&sortOrder=${sortDirection}`;
+      }
+      
+      // Add search term if it exists
+      if (searchTerm) {
+        apiUrl += `&search=${encodeURIComponent(searchTerm)}`;
+      }
+
+      console.log("Fetching products from:", apiUrl);
+
+      const response = await fetch(apiUrl, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -114,15 +153,39 @@ export default function AdminProducts() {
       }
 
       const data = await response.json()
+      console.log("API response:", data);
 
       if (data.success) {
         // Process the data to handle blob URLs and add necessary fields
         const processedProducts = processProductData(data, categories);
         setProducts(processedProducts);
+        
+        // Set total items for pagination based on the API response structure
+        if (data.data?.meta?.total) {
+          setTotalItems(data.data.meta.total);
+          console.log("Total items set from meta.total:", data.data.meta.total);
+          
+          // Also log the totalPage value to verify
+          if (data.data?.meta?.totalPage) {
+            console.log("Total pages from API:", data.data.meta.totalPage);
+          }
+        } else if (data.data?.totalPage) {
+          // If we have totalPage but not total items, calculate an estimate
+          setTotalItems(data.data.totalPage * itemsPerPage);
+          console.log("Total items estimated from totalPage:", data.data.totalPage * itemsPerPage);
+        } else if (data.data?.result?.length) {
+          // Last resort fallback
+          setTotalItems(Math.max(data.data.result.length, itemsPerPage));
+          console.log("Total items fallback to result length:", Math.max(data.data.result.length, itemsPerPage));
+        } else {
+          setTotalItems(0);
+          console.log("No items found, setting total to 0");
+        }
       } else {
         // The API returned success: false
         if (data.message === "No Data Available") {
           setProducts([])
+          setTotalItems(0)
         } else {
           throw new Error(data.message || "Failed to fetch products")
         }
@@ -131,38 +194,25 @@ export default function AdminProducts() {
       console.error("Fetch products error:", err)
       setError("An error occurred while fetching products: " + err.message)
       setProducts([])
+      setTotalItems(0)
     } finally {
       setLoading(false)
     }
   }
 
-  // Handle search
-  const filteredProducts = Array.isArray(products) 
-    ? products.filter(
-        (product) =>
-          product.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.productId?.toString().includes(searchTerm) ||
-          product.categoryName?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : [];
-
-  // Handle sorting
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    const aValue = a[sortField] || ""
-    const bValue = b[sortField] || ""
-
-    if (typeof aValue === "string" && typeof bValue === "string") {
-      return sortDirection === "asc" ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue)
-    } else {
-      return sortDirection === "asc" ? aValue - bValue : bValue - aValue
-    }
-  })
-
-  // Pagination logic
-  const indexOfLastItem = currentPage * itemsPerPage
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage
-  const currentItems = sortedProducts.slice(indexOfFirstItem, indexOfLastItem)
-  const totalPages = Math.ceil(sortedProducts.length / itemsPerPage)
+  // useEffect hook to trigger fetch when search term changes
+  useEffect(() => {
+    // Add debounce for search to prevent too many API calls
+    const delaySearch = setTimeout(() => {
+      if (currentPage !== 1) {
+        setCurrentPage(1);  // Reset to page 1 when search changes
+      } else {
+        fetchProducts();  // If already on page 1, fetch directly
+      }
+    }, 500);
+    
+    return () => clearTimeout(delaySearch);
+  }, [searchTerm]);
 
   // Handle sort change
   const handleSort = (field) => {
@@ -179,7 +229,7 @@ export default function AdminProducts() {
     if (selectAll) {
       setSelectedProducts([])
     } else {
-      setSelectedProducts(currentItems.map((product) => product.productId))
+      setSelectedProducts(products.map((product) => product.productId))
     }
     setSelectAll(!selectAll)
   }
@@ -221,6 +271,9 @@ export default function AdminProducts() {
         setProducts(products.filter(product => product.productId !== productId))
         alert("Product deleted successfully")
         
+        // Refresh the current page to get updated data
+        fetchProducts()
+        
       } catch (err) {
         console.error("Delete product error:", err)
         alert("Failed to delete product: " + err.message)
@@ -256,11 +309,9 @@ export default function AdminProducts() {
           }
         }
 
-        // If all deletions succeeded, update the UI
-        setProducts(products.filter(product => !selectedProducts.includes(product.productId)))
-        setSelectedProducts([])
-        setSelectAll(false)
         alert("Products deleted successfully")
+        // Refresh the product list after deletion
+        fetchProducts()
         
       } catch (err) {
         console.error("Bulk delete error:", err)
@@ -271,6 +322,23 @@ export default function AdminProducts() {
         setDeleteLoading(false)
       }
     }
+  }
+
+  // Calculate total pages from totalItems
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage))
+
+  // Handle items per page change
+  const handleItemsPerPageChange = (e) => {
+    const newValue = parseInt(e.target.value, 10);
+    setItemsPerPage(newValue);
+    
+    // Store in localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('productsPerPage', newValue.toString());
+    }
+    
+    // Reset to first page when changing items per page
+    setCurrentPage(1);
   }
 
   if (loading && products.length === 0) {
@@ -401,7 +469,7 @@ export default function AdminProducts() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {currentItems.map((product) => (
+              {products.map((product) => (
                 <tr key={product.productId} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-2 py-2">
                     <input
@@ -459,76 +527,144 @@ export default function AdminProducts() {
               ))}
             </tbody>
           </table>
+          
+          {loading && (
+            <div className="flex justify-center items-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500"></div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-between items-center mt-3">
-          <div className="text-xs text-gray-700 dark:text-gray-300">
-            Showing <span className="font-medium">{indexOfFirstItem + 1}</span> to{" "}
-            <span className="font-medium">
-              {indexOfLastItem > filteredProducts.length ? filteredProducts.length : indexOfLastItem}
-            </span>{" "}
-            of <span className="font-medium">{filteredProducts.length}</span> results
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-6 pb-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+        <div className="flex flex-col sm:flex-row items-center sm:items-center gap-2 mb-3 sm:mb-0 w-full sm:w-auto">
+          <div className="text-xs text-gray-700 dark:text-gray-300 w-full sm:w-auto text-center sm:text-left">
+            {products.length > 0 ? (
+              <>
+                Showing <span className="font-medium">{((currentPage - 1) * itemsPerPage) + 1}</span> to{" "}
+                <span className="font-medium">
+                  {Math.min(currentPage * itemsPerPage, totalItems)}
+                </span>{" "}
+                of <span className="font-medium">{totalItems}</span> results
+              </>
+            ) : (
+              "No results found"
+            )}
           </div>
-          <div className="flex space-x-1">
+          
+          {/* Items per page selector */}
+          <div className="flex items-center gap-2 text-xs ml-3">
+            <label htmlFor="itemsPerPage" className="text-gray-600 dark:text-gray-400 whitespace-nowrap">
+              Show per page:
+            </label>
+            <div className="relative">
+              <select
+                id="itemsPerPage"
+                value={itemsPerPage}
+                onChange={handleItemsPerPageChange}
+                className="appearance-none bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-md focus:ring-blue-500 focus:border-blue-500 block w-full py-1.5 px-3 pr-8 dark:bg-gray-700 dark:border-gray-600 dark:text-white cursor-pointer"
+              >
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500 dark:text-gray-400">
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Only show pagination controls when we have multiple pages */}
+        {totalPages > 1 && (
+          <div className="flex flex-wrap gap-1 justify-center w-full sm:w-auto">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1 || loading}
+              className={`px-2 py-1 rounded-md text-xs ${
+                currentPage === 1 || loading
+                  ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              }`}
+            >
+              First
+            </button>
+            
             <button
               onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className={`px-2 py-0.5 rounded-md text-xs ${
-                currentPage === 1
+              disabled={currentPage === 1 || loading}
+              className={`px-2 py-1 rounded-md text-xs ${
+                currentPage === 1 || loading
                   ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
                   : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
               }`}
             >
               Previous
             </button>
-            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+            
+            {Array.from({ length: Math.max(1, Math.min(totalPages, 5)) }, (_, i) => {
               // Calculate appropriate page numbers based on current page
-              let pageNum
+              let pageNum;
               if (totalPages <= 5) {
                 // If 5 or fewer pages, show all
-                pageNum = i + 1
+                pageNum = i + 1;
               } else if (currentPage <= 3) {
                 // If near the start, show first 5
-                pageNum = i + 1
+                pageNum = i + 1;
               } else if (currentPage >= totalPages - 2) {
                 // If near the end, show last 5
-                pageNum = totalPages - 4 + i
+                pageNum = totalPages - 4 + i;
               } else {
                 // Otherwise show 2 before, current, and 2 after
-                pageNum = currentPage - 2 + i
+                pageNum = currentPage - 2 + i;
               }
               
               return (
                 <button
                   key={pageNum}
                   onClick={() => setCurrentPage(pageNum)}
-                  className={`px-2 py-0.5 rounded-md text-xs ${
+                  disabled={loading}
+                  className={`px-2 py-1 rounded-md text-xs min-w-[28px] ${
                     currentPage === pageNum
-                      ? "bg-blue-600 text-white"
+                      ? "bg-blue-600 text-white font-medium"
                       : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                   }`}
                 >
                   {pageNum}
                 </button>
-              )
+              );
             })}
+            
             <button
               onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              className={`px-2 py-0.5 rounded-md text-xs ${
-                currentPage === totalPages
+              disabled={currentPage === totalPages || loading}
+              className={`px-2 py-1 rounded-md text-xs ${
+                currentPage === totalPages || loading
                   ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
                   : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
               }`}
             >
               Next
             </button>
+            
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages || loading}
+              className={`px-2 py-1 rounded-md text-xs ${
+                currentPage === totalPages || loading
+                  ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              }`}
+            >
+              Last
+            </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

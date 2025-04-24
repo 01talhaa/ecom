@@ -425,22 +425,34 @@ export default function AddProduct() {
         throw new Error(errorMessage);
       }
       
-      const responseData = await response.json();
-      console.log(`${type} upload response:`, responseData);
-      
-      // Handle different response formats
-      if (responseData.fileUrl) {
-        // Direct fileUrl in response
-        return responseData.fileUrl;
-      } else if (responseData.success && responseData.data) {
-        // Nested data structure
-        return responseData.data.fileUrl || responseData.data.url || responseData.data;
-      } else if (responseData.url) {
-        // Direct url in response
-        return responseData.url;
+      // Ensure we can handle both JSON and text responses
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const responseData = await response.json();
+        console.log(`${type} upload response:`, responseData);
+        
+        // Handle different response formats
+        if (responseData.fileUrl) {
+          // Direct fileUrl in response
+          return responseData.fileUrl;
+        } else if (responseData.success && responseData.data) {
+          // Nested data structure
+          return responseData.data.fileUrl || responseData.data.url || responseData.data;
+        } else if (responseData.url) {
+          // Direct url in response
+          return responseData.url;
+        } else {
+          console.error("Unexpected response format:", responseData);
+          throw new Error(`Failed to upload ${type}: Unexpected response format`);
+        }
       } else {
-        console.error("Unexpected response format:", responseData);
-        throw new Error(`Failed to upload ${type}: Unexpected response format`);
+        // For text responses (sometimes APIs return URLs directly as text)
+        const textResponse = await response.text();
+        if (textResponse && textResponse.trim()) {
+          return textResponse.trim();
+        } else {
+          throw new Error(`Failed to upload ${type}: Empty response`);
+        }
       }
       
     } catch (error) {
