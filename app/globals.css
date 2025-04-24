@@ -1,0 +1,215 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+.dark {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 0, 0, 0;
+  --background-end-rgb: 0, 0, 0;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: white;
+}
+
+.dark body {
+  background: rgb(17, 24, 39);
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded dark:bg-blue-700 dark:hover:bg-blue-800;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200;
+  }
+
+  .card {
+    @apply bg-white rounded-lg shadow-md overflow-hidden dark:bg-gray-800 dark:text-gray-100;
+  }
+
+  .form-input {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white;
+  }
+}
+
+/* Add to your globals.css or create a new CSS file and import it */
+
+/* Editor content styles */
+.editor-content .ProseMirror {
+  outline: none;
+  min-height: 150px;
+}
+
+.editor-content .ProseMirror p {
+  margin-bottom: 0.75rem;
+}
+
+.dark .editor-content .ProseMirror {
+  color: #f3f4f6;
+}
+
+.editor-content .ProseMirror h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #1f2937;
+}
+
+.editor-content .ProseMirror h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: #1f2937;
+}
+
+.dark .editor-content .ProseMirror h1,
+.dark .editor-content .ProseMirror h2 {
+  color: #f3f4f6;
+}
+
+.editor-content .ProseMirror ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.editor-content .ProseMirror ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.editor-content .ProseMirror a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+.editor-content .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  margin: 1rem 0;
+  border-radius: 0.375rem;
+}
+
+.editor-content .ProseMirror blockquote {
+  border-left: 3px solid #e5e7eb;
+  padding-left: 1rem;
+  margin-left: 0;
+  margin-right: 0;
+  font-style: italic;
+}
+
+.dark .editor-content .ProseMirror blockquote {
+  border-left-color: #4b5563;
+}
+
+.editor-content .ProseMirror code {
+  background-color: #f3f4f6;
+  padding: 0.2em 0.4em;
+  border-radius: 0.25rem;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+.dark .editor-content .ProseMirror code {
+  background-color: #374151;
+  color: #e5e7eb;
+}
+
+.editor-content .ProseMirror pre {
+  background-color: #1f2937;
+  color: #f3f4f6;
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.editor-content .ProseMirror pre code {
+  background-color: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.editor-content .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+}
+
+/* Fix for placeholder text in dark mode */
+.dark .editor-content .ProseMirror p.is-editor-empty:first-child::before {
+  color: #6b7280;
+}
+
+/* Custom alignment classes */
+.editor-content .ProseMirror .text-left {
+  text-align: left;
+}
+
+.editor-content .ProseMirror .text-center {
+  text-align: center;
+}
+
+.editor-content .ProseMirror .text-right {
+  text-align: right;
+}
+
+.editor-content .ProseMirror .text-justify {
+  text-align: justify;
+}
+
+
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+
+@keyframes fadeDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeDown {
+  animation: fadeDown 0.2s ease-out forwards;
+}
