@@ -1,287 +1,458 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Filter, ArrowUpDown, UserPlus, Edit, Trash2, UserX, UserCheck } from "lucide-react"
+import { Search, Filter, ArrowUpDown, UserPlus, Edit, Trash2, UserX, UserCheck, AlertCircle } from "lucide-react"
 import Image from "next/image"
+import { useAuth } from "@/context/AuthContext"
 
-export default function AdminUsers() {
-  const [users, setUsers] = useState([])
+// Helper function to safely parse JSON
+const safelyParseJson = async (response) => {
+  try {
+    // First check if response is ok
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    // Get the response text first
+    const text = await response.text();
+    
+    // If empty response, return a default structure
+    if (!text || text.trim() === '') {
+      console.warn('Empty response received from API');
+      return { success: false, message: 'Empty response received from server' };
+    }
+    
+    // Try to parse the text as JSON
+    try {
+      return JSON.parse(text);
+    } catch (jsonError) {
+      console.error('JSON parsing error:', jsonError, 'Raw response:', text);
+      return { success: false, message: 'Invalid JSON response from server' };
+    }
+  } catch (err) {
+    console.error('Response error:', err);
+    return { success: false, message: err.message };
+  }
+};
+
+export default function AdminCustomers() {
+  const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(10)
-  const [sortField, setSortField] = useState("name")
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [totalItems, setTotalItems] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const [sortField, setSortField] = useState("customerName")
   const [sortDirection, setSortDirection] = useState("asc")
   const [filterOptions, setFilterOptions] = useState({
-    role: "",
+    customerType: "",
     status: "",
   })
   const [showFilters, setShowFilters] = useState(false)
-  const [showAddUserModal, setShowAddUserModal] = useState(false)
-  const [showEditUserModal, setShowEditUserModal] = useState(false)
-  const [currentUser, setCurrentUser] = useState(null)
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false)
+  const [showEditCustomerModal, setShowEditCustomerModal] = useState(false)
+  const [currentCustomer, setCurrentCustomer] = useState(null)
   const [formData, setFormData] = useState({
-    name: "",
+    customerName: "",
+    customerAddress: "",
+    mobile: "",
+    customerType: "New",
     email: "",
-    phone: "",
-    role: "customer",
-    status: "active",
+    status: true,
   })
+  const { getAuthToken } = useAuth()
 
+  // Fetch customers on page load and when pagination/filters change
   useEffect(() => {
-    async function fetchUsers() {
-      setLoading(true)
-      // In a real app, you would fetch users from your API
-      // For demo purposes, we'll create mock data
-      const mockUsers = [
-        {
-          id: "1",
-          name: "John Doe",
-          email: "john@example.com",
-          phone: "+1234567890",
-          role: "admin",
-          status: "active",
-          avatar: "/placeholder.svg",
-          lastLogin: "2023-07-10T09:30:00Z",
-          createdAt: "2023-01-15T10:30:00Z",
-        },
-        {
-          id: "2",
-          name: "Jane Smith",
-          email: "jane@example.com",
-          phone: "+1987654321",
-          role: "staff",
-          status: "active",
-          avatar: "/placeholder.svg",
-          lastLogin: "2023-07-09T14:45:00Z",
-          createdAt: "2023-02-20T14:45:00Z",
-        },
-        {
-          id: "3",
-          name: "Robert Johnson",
-          email: "robert@example.com",
-          phone: "+1122334455",
-          role: "customer",
-          status: "active",
-          avatar: "/placeholder.svg",
-          lastLogin: "2023-07-08T11:20:00Z",
-          createdAt: "2023-03-10T09:15:00Z",
-        },
-        {
-          id: "4",
-          name: "Emily Davis",
-          email: "emily@example.com",
-          phone: "+1555666777",
-          role: "customer",
-          status: "inactive",
-          avatar: "/placeholder.svg",
-          lastLogin: "2023-06-15T16:30:00Z",
-          createdAt: "2023-03-15T16:20:00Z",
-        },
-        {
-          id: "5",
-          name: "Michael Wilson",
-          email: "michael@example.com",
-          phone: "+1777888999",
-          role: "staff",
-          status: "active",
-          avatar: "/placeholder.svg",
-          lastLogin: "2023-07-07T10:15:00Z",
-          createdAt: "2023-04-05T11:10:00Z",
-        },
-        {
-          id: "6",
-          name: "Sarah Brown",
-          email: "sarah@example.com",
-          phone: "+1333444555",
-          role: "customer",
-          status: "active",
-          avatar: "/placeholder.svg",
-          lastLogin: "2023-07-05T09:45:00Z",
-          createdAt: "2023-04-10T13:45:00Z",
-        },
-        {
-          id: "7",
-          name: "David Miller",
-          email: "david@example.com",
-          phone: "+1666777888",
-          role: "customer",
-          status: "active",
-          avatar: "/placeholder.svg",
-          lastLogin: "2023-07-06T14:20:00Z",
-          createdAt: "2023-05-01T09:30:00Z",
-        },
-      ]
+    fetchCustomers()
+  }, [currentPage])
 
-      setUsers(mockUsers)
+  const fetchCustomers = async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        throw new Error("Authentication token is missing")
+      }
+
+      // Construct the API URL with pagination parameters
+      let apiUrl = `/api/proxy/api/v1/customers?page=${currentPage}&limit=${itemsPerPage}`
+
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const data = await safelyParseJson(response)
+      
+      if (data.success) {
+        console.log("Customers data:", data)
+        setCustomers(data.data.result)
+        setTotalItems(data.data.meta.total)
+        setTotalPages(data.data.meta.totalPage)
+      } else {
+        throw new Error(data.message || "Failed to fetch customers")
+      }
+    } catch (err) {
+      console.error("Error fetching customers:", err)
+      setError(err.message || "An error occurred while fetching customers")
+    } finally {
       setLoading(false)
     }
-    fetchUsers()
-  }, [])
+  }
 
-  // Handle search and filters
-  const filteredUsers = users.filter((user) => {
-    // Search term filter
-    const matchesSearch =
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.phone.includes(searchTerm)
+  // Fetch single customer details
+  const fetchCustomerDetails = async (customerId) => {
+    setLoading(true)
+    setError(null)
 
-    // Role filter
-    const matchesRole = filterOptions.role ? user.role === filterOptions.role : true
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        throw new Error("Authentication token is missing")
+      }
 
-    // Status filter
-    const matchesStatus = filterOptions.status ? user.status === filterOptions.status : true
+      const response = await fetch(`/api/proxy/api/v1/customers/${customerId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
 
-    return matchesSearch && matchesRole && matchesStatus
-  })
-
-  // Handle sorting
-  const sortedUsers = [...filteredUsers].sort((a, b) => {
-    const aValue = a[sortField]
-    const bValue = b[sortField]
-
-    if (typeof aValue === "string" && typeof bValue === "string") {
-      return sortDirection === "asc" ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue)
-    } else {
-      return 0
+      const data = await safelyParseJson(response)
+      
+      if (data.success) {
+        setCurrentCustomer(data.data)
+        // Populate form data with customer details
+        setFormData({
+          customerName: data.data.customerName || "",
+          customerAddress: data.data.customerAddress || "",
+          mobile: data.data.mobile || "",
+          customerType: data.data.customerType || "New",
+          email: data.data.email || "",
+          status: data.data.status
+        })
+        return data.data
+      } else {
+        throw new Error(data.message || "Failed to fetch customer details")
+      }
+    } catch (err) {
+      console.error("Error fetching customer details:", err)
+      setError(err.message || "An error occurred while fetching customer details")
+      return null
+    } finally {
+      setLoading(false)
     }
-  })
+  }
 
-  // Handle pagination
-  const indexOfLastItem = currentPage * itemsPerPage
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage
-  const currentItems = sortedUsers.slice(indexOfFirstItem, indexOfLastItem)
-  const totalPages = Math.ceil(sortedUsers.length / itemsPerPage)
+  // Handle add customer form submission
+  const handleAddCustomer = async (e) => {
+    e.preventDefault()
+    
+    setLoading(true)
+    setError(null)
 
-  // Handle sort change
-  const handleSort = (field) => {
-    if (field === sortField) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
-    } else {
-      setSortField(field)
-      setSortDirection("asc")
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        throw new Error("Authentication token is missing")
+      }
+
+      // Create customer object for API
+      const customerData = {
+        customerId: 0, // New customer
+        customerName: formData.customerName,
+        customerAddress: formData.customerAddress,
+        mobile: formData.mobile,
+        customerType: formData.customerType,
+        email: formData.email,
+        loginId: 0, // This will be set by the API
+        status: formData.status,
+        createdBy: 0, // This will be set by the API
+        createdTime: new Date().toISOString()
+      }
+
+      const response = await fetch("/api/proxy/api/v1/customers", {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(customerData)
+      })
+
+      const data = await safelyParseJson(response)
+      
+      if (data.success) {
+        // Reset form and close modal
+        setFormData({
+          customerName: "",
+          customerAddress: "",
+          mobile: "",
+          customerType: "New",
+          email: "",
+          status: true
+        })
+        setShowAddCustomerModal(false)
+        
+        // Refresh customers list
+        fetchCustomers()
+        
+        alert("Customer added successfully!")
+      } else {
+        throw new Error(data.message || "Failed to add customer")
+      }
+    } catch (err) {
+      console.error("Error adding customer:", err)
+      setError(err.message || "An error occurred while adding the customer")
+    } finally {
+      setLoading(false)
     }
+  }
+
+  // Handle edit customer form submission
+  const handleUpdateCustomer = async (e) => {
+    e.preventDefault()
+    
+    setLoading(true)
+    setError(null)
+
+    try {
+      const token = getAuthToken()
+      if (!token) {
+        throw new Error("Authentication token is missing")
+      }
+
+      // Create customer object for API
+      const customerData = {
+        customerId: currentCustomer.customerId,
+        customerName: formData.customerName,
+        customerAddress: formData.customerAddress,
+        mobile: formData.mobile,
+        customerType: formData.customerType,
+        email: formData.email,
+        loginId: currentCustomer.loginId,
+        status: formData.status,
+        createdBy: currentCustomer.createdBy,
+        createdTime: currentCustomer.createdTime
+      }
+
+      const response = await fetch(`/api/proxy/api/v1/customers/${currentCustomer.customerId}`, {
+        method: "PUT",
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(customerData)
+      })
+
+      const data = await safelyParseJson(response)
+      
+      if (data.success) {
+        // Reset form and close modal
+        setFormData({
+          customerName: "",
+          customerAddress: "",
+          mobile: "",
+          customerType: "New",
+          email: "",
+          status: true
+        })
+        setCurrentCustomer(null)
+        setShowEditCustomerModal(false)
+        
+        // Refresh customers list
+        fetchCustomers()
+        
+        alert("Customer updated successfully!")
+      } else {
+        throw new Error(data.message || "Failed to update customer")
+      }
+    } catch (err) {
+      console.error("Error updating customer:", err)
+      setError(err.message || "An error occurred while updating the customer")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Handle delete customer
+  const handleDeleteCustomer = async (customerId) => {
+    if (window.confirm("Are you sure you want to delete this customer?")) {
+      setLoading(true)
+      setError(null)
+
+      try {
+        const token = getAuthToken()
+        if (!token) {
+          throw new Error("Authentication token is missing")
+        }
+
+        const response = await fetch(`/api/proxy/api/v1/customers/${customerId}`, {
+          method: "DELETE",
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
+
+        const data = await safelyParseJson(response)
+        
+        if (data.success) {
+          // Refresh customers list
+          fetchCustomers()
+          
+          alert("Customer deleted successfully!")
+        } else {
+          throw new Error(data.message || "Failed to delete customer")
+        }
+      } catch (err) {
+        console.error("Error deleting customer:", err)
+        setError(err.message || "An error occurred while deleting the customer")
+      } finally {
+        setLoading(false)
+      }
+    }
+  }
+
+  // Handle toggle customer status
+  const handleToggleCustomerStatus = async (customerId, currentStatus) => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      // First fetch customer details
+      const token = getAuthToken()
+      if (!token) {
+        throw new Error("Authentication token is missing")
+      }
+
+      const response = await fetch(`/api/proxy/api/v1/customers/${customerId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const data = await safelyParseJson(response)
+      
+      if (data.success) {
+        const customer = data.data
+        
+        // Update status
+        const updatedCustomer = {
+          ...customer,
+          status: !currentStatus
+        }
+        
+        // Send update request
+        const updateResponse = await fetch(`/api/proxy/api/v1/customers/${customerId}`, {
+          method: "PUT",
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updatedCustomer)
+        })
+        
+        const updateData = await safelyParseJson(updateResponse)
+        
+        if (updateData.success) {
+          // Refresh customers list
+          fetchCustomers()
+          
+          alert(`Customer ${currentStatus ? 'deactivated' : 'activated'} successfully!`)
+        } else {
+          throw new Error(updateData.message || "Failed to update customer status")
+        }
+      } else {
+        throw new Error(data.message || "Failed to fetch customer details")
+      }
+    } catch (err) {
+      console.error("Error toggling customer status:", err)
+      setError(err.message || "An error occurred while updating customer status")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Handle edit customer
+  const handleEditCustomer = async (customerId) => {
+    const customerData = await fetchCustomerDetails(customerId)
+    if (customerData) {
+      setShowEditCustomerModal(true)
+    }
+  }
+
+  // Handle form input changes
+  const handleFormChange = (e) => {
+    const { name, value, type, checked } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }))
   }
 
   // Handle filter change
   const handleFilterChange = (e) => {
     const { name, value } = e.target
-    setFilterOptions((prev) => ({
+    setFilterOptions(prev => ({
       ...prev,
-      [name]: value,
+      [name]: value
     }))
   }
 
   // Reset filters
   const resetFilters = () => {
     setFilterOptions({
-      role: "",
-      status: "",
+      customerType: "",
+      status: ""
     })
     setSearchTerm("")
   }
 
-  // Handle form change
-  const handleFormChange = (e) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
-  }
+  // Get local filtered data (filtering is done on the server)
+  const filteredCustomers = customers.filter(customer => {
+    // Search term filter (client-side)
+    const matchesSearch = searchTerm === "" || 
+      (customer.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      customer.mobile?.includes(searchTerm))
 
-  // Handle add user
-  const handleAddUser = (e) => {
-    e.preventDefault()
+    // Customer type filter (client-side)
+    const matchesType = filterOptions.customerType === "" || 
+      customer.customerType === filterOptions.customerType
 
-    // In a real app, you would call an API to add the user
-    const newUser = {
-      id: String(Date.now()),
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      role: formData.role,
-      status: formData.status,
-      avatar: "/placeholder.svg",
-      lastLogin: null,
-      createdAt: new Date().toISOString(),
-    }
+    // Status filter (client-side)
+    const matchesStatus = filterOptions.status === "" || 
+      (filterOptions.status === "active" && customer.status) ||
+      (filterOptions.status === "inactive" && !customer.status)
 
-    setUsers((prev) => [...prev, newUser])
-    setShowAddUserModal(false)
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      role: "customer",
-      status: "active",
-    })
-  }
+    return matchesSearch && matchesType && matchesStatus
+  })
 
-  // Handle edit user
-  const handleEditUser = (user) => {
-    setCurrentUser(user)
-    setFormData({
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      status: user.status,
-    })
-    setShowEditUserModal(true)
-  }
+  // Extract unique customer types for filter dropdown
+  const uniqueCustomerTypes = [...new Set(customers.map(c => c.customerType))].filter(Boolean)
 
-  // Handle update user
-  const handleUpdateUser = (e) => {
-    e.preventDefault()
-
-    // In a real app, you would call an API to update the user
-    setUsers((prev) =>
-      prev.map((user) =>
-        user.id === currentUser.id
-          ? {
-              ...user,
-              name: formData.name,
-              email: formData.email,
-              phone: formData.phone,
-              role: formData.role,
-              status: formData.status,
-            }
-          : user,
-      ),
-    )
-
-    setShowEditUserModal(false)
-    setCurrentUser(null)
-    setFormData({
-      name: "",
-      email: "",
-      phone: "",
-      role: "customer",
-      status: "active",
-    })
-  }
-
-  // Handle delete user
-  const handleDeleteUser = (userId) => {
-    if (window.confirm("Are you sure you want to delete this user?")) {
-      // In a real app, you would call an API to delete the user
-      setUsers((prev) => prev.filter((user) => user.id !== userId))
+  // Format date string to local format
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A'
+    
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
+    } catch (err) {
+      return dateString
     }
   }
 
-  // Handle toggle user status
-  const handleToggleUserStatus = (userId, currentStatus) => {
-    // In a real app, you would call an API to update the user status
-    setUsers((prev) =>
-      prev.map((user) =>
-        user.id === userId ? { ...user, status: currentStatus === "active" ? "inactive" : "active" } : user,
-      ),
-    )
-  }
-
-  if (loading) {
+  if (loading && customers.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -292,7 +463,7 @@ export default function AdminUsers() {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-4 sm:mb-0">Users</h1>
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-4 sm:mb-0">Customers</h1>
         <div className="flex space-x-2">
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -303,39 +474,55 @@ export default function AdminUsers() {
           </button>
           <button
             onClick={() => {
-              setShowAddUserModal(true)
+              setShowAddCustomerModal(true)
               setFormData({
-                name: "",
+                customerName: "",
+                customerAddress: "",
+                mobile: "",
+                customerType: "New",
                 email: "",
-                phone: "",
-                role: "customer",
-                status: "active",
+                status: true
               })
             }}
             className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
           >
             <UserPlus className="w-4 h-4 mr-2" />
-            Add User
+            Add Customer
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 rounded-md flex items-start">
+          <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0" />
+          <div>
+            <p>{error}</p>
+            <button 
+              onClick={fetchCustomers}
+              className="text-sm underline mt-1"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       {showFilters && (
         <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Customer Type</label>
               <select
-                name="role"
-                value={filterOptions.role}
+                name="customerType"
+                value={filterOptions.customerType}
                 onChange={handleFilterChange}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               >
-                <option value="">All Roles</option>
-                <option value="admin">Admin</option>
-                <option value="staff">Staff</option>
-                <option value="customer">Customer</option>
+                <option value="">All Types</option>
+                {uniqueCustomerTypes.map(type => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
               </select>
             </div>
 
@@ -373,60 +560,39 @@ export default function AdminUsers() {
           <input
             type="text"
             className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-            placeholder="Search users..."
+            placeholder="Search customers..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
 
         <div className="text-sm text-gray-500 dark:text-gray-400">
-          Showing {filteredUsers.length} of {users.length} users
+          Showing {filteredCustomers.length} of {totalItems} customers
         </div>
       </div>
 
-      {/* Users Table */}
+      {/* Customers Table */}
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
           <thead className="bg-gray-50 dark:bg-gray-700">
             <tr>
-              <th className="w-12 px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                Avatar
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                ID
               </th>
-              <th
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => handleSort("name")}
-              >
-                <div className="flex items-center">
-                  Name
-                  <ArrowUpDown className="w-4 h-4 ml-1" />
-                </div>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Name
               </th>
-              <th
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => handleSort("email")}
-              >
-                <div className="flex items-center">
-                  Email
-                  <ArrowUpDown className="w-4 h-4 ml-1" />
-                </div>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Contact
               </th>
-              <th
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => handleSort("role")}
-              >
-                <div className="flex items-center">
-                  Role
-                  <ArrowUpDown className="w-4 h-4 ml-1" />
-                </div>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Type
               </th>
-              <th
-                className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                onClick={() => handleSort("status")}
-              >
-                <div className="flex items-center">
-                  Status
-                  <ArrowUpDown className="w-4 h-4 ml-1" />
-                </div>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Created
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                Status
               </th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                 Actions
@@ -434,73 +600,91 @@ export default function AdminUsers() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {currentItems.map((user) => (
-              <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                <td className="px-4 py-3">
-                  <div className="w-8 h-8 relative rounded-full overflow-hidden">
-                    <Image src={user.avatar || "/placeholder.svg"} alt={user.name} fill className="object-cover" />
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                  <div className="font-medium">{user.name}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">{user.phone}</div>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{user.email}</td>
-                <td className="px-4 py-3 text-sm">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs ${
-                      user.role === "admin"
-                        ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-                        : user.role === "staff"
-                          ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                          : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
-                    }`}
-                  >
-                    {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs ${
-                      user.status === "active"
-                        ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                        : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                    }`}
-                  >
-                    {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-sm text-right">
-                  <div className="flex justify-end space-x-2">
-                    <button
-                      onClick={() => handleToggleUserStatus(user.id, user.status)}
-                      className={`${
-                        user.status === "active"
-                          ? "text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                          : "text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
-                      }`}
-                      title={user.status === "active" ? "Deactivate User" : "Activate User"}
-                    >
-                      {user.status === "active" ? <UserX className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
-                    </button>
-                    <button
-                      onClick={() => handleEditUser(user)}
-                      className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                      title="Edit User"
-                    >
-                      <Edit className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                      title="Delete User"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
+            {filteredCustomers.length === 0 ? (
+              <tr>
+                <td colSpan="7" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  No customers found. 
+                  {searchTerm || filterOptions.customerType || filterOptions.status ? " Try clearing your filters." : ""}
                 </td>
               </tr>
-            ))}
+            ) : (
+              filteredCustomers.map(customer => (
+                <tr key={customer.customerId} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    {customer.customerId}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                    <div className="font-medium">{customer.customerName || 'Unnamed Customer'}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">
+                      {customer.customerAddress || 'No address'}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    <div>{customer.email}</div>
+                    <div>{customer.mobile}</div>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${
+                        customer.customerType === "Premium"
+                          ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                          : customer.customerType === "Regular"
+                            ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                            : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                      }`}
+                    >
+                      {customer.customerType || 'Unknown'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                    {formatDate(customer.createdTime)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-center">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${
+                        customer.status
+                          ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                          : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                      }`}
+                    >
+                      {customer.status ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-right">
+                    <div className="flex justify-end space-x-2">
+                      <button
+                        onClick={() => handleToggleCustomerStatus(customer.customerId, customer.status)}
+                        className={`${
+                          customer.status
+                            ? "text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                            : "text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
+                        }`}
+                        title={customer.status ? "Deactivate Customer" : "Activate Customer"}
+                        disabled={loading}
+                      >
+                        {customer.status ? <UserX className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
+                      </button>
+                      <button
+                        onClick={() => handleEditCustomer(customer.customerId)}
+                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                        title="Edit Customer"
+                        disabled={loading}
+                      >
+                        <Edit className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCustomer(customer.customerId)}
+                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                        title="Delete Customer"
+                        disabled={loading}
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -509,42 +693,83 @@ export default function AdminUsers() {
       {totalPages > 1 && (
         <div className="flex justify-between items-center mt-6">
           <div className="text-sm text-gray-700 dark:text-gray-300">
-            Showing <span className="font-medium">{indexOfFirstItem + 1}</span> to{" "}
-            <span className="font-medium">
-              {indexOfLastItem > filteredUsers.length ? filteredUsers.length : indexOfLastItem}
-            </span>{" "}
-            of <span className="font-medium">{filteredUsers.length}</span> results
+            Page {currentPage} of {totalPages}
           </div>
           <div className="flex space-x-2">
             <button
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1 || loading}
               className={`px-3 py-1 rounded-md ${
-                currentPage === 1
+                currentPage === 1 || loading
                   ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
                   : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
               }`}
             >
               Previous
             </button>
-            {[...Array(totalPages)].map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentPage(i + 1)}
-                className={`px-3 py-1 rounded-md ${
-                  currentPage === i + 1
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                }`}
-              >
-                {i + 1}
-              </button>
-            ))}
+            {totalPages <= 5 ? (
+              [...Array(totalPages)].map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentPage(i + 1)}
+                  className={`px-3 py-1 rounded-md ${
+                    currentPage === i + 1
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))
+            ) : (
+              // Advanced pagination for many pages
+              <>
+                {currentPage > 2 && (
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    className="px-3 py-1 rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  >
+                    1
+                  </button>
+                )}
+                {currentPage > 3 && <span className="px-1 py-1">...</span>}
+                {currentPage > 1 && (
+                  <button
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                    className="px-3 py-1 rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  >
+                    {currentPage - 1}
+                  </button>
+                )}
+                <button
+                  className="px-3 py-1 rounded-md bg-blue-600 text-white"
+                >
+                  {currentPage}
+                </button>
+                {currentPage < totalPages && (
+                  <button
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    className="px-3 py-1 rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  >
+                    {currentPage + 1}
+                  </button>
+                )}
+                {currentPage < totalPages - 2 && <span className="px-1 py-1">...</span>}
+                {currentPage < totalPages - 1 && (
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    className="px-3 py-1 rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  >
+                    {totalPages}
+                  </button>
+                )}
+              </>
+            )}
             <button
-              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || loading}
               className={`px-3 py-1 rounded-md ${
-                currentPage === totalPages
+                currentPage === totalPages || loading
                   ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
                   : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
               }`}
@@ -555,21 +780,27 @@ export default function AdminUsers() {
         </div>
       )}
 
-      {/* Add User Modal */}
-      {showAddUserModal && (
+      {/* Add Customer Modal */}
+      {showAddCustomerModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-md">
             <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Add New User</h2>
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Add New Customer</h2>
+              
+              {error && (
+                <div className="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 rounded-md">
+                  {error}
+                </div>
+              )}
 
-              <form onSubmit={handleAddUser}>
+              <form onSubmit={handleAddCustomer}>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Customer Name</label>
                     <input
                       type="text"
-                      name="name"
-                      value={formData.name}
+                      name="customerName"
+                      value={formData.customerName}
                       onChange={handleFormChange}
                       required
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -589,58 +820,82 @@ export default function AdminUsers() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mobile</label>
                     <input
                       type="tel"
-                      name="phone"
-                      value={formData.phone}
+                      name="mobile"
+                      value={formData.mobile}
                       onChange={handleFormChange}
-                      required
+                      placeholder="+880"
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
-                    <select
-                      name="role"
-                      value={formData.role}
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Address</label>
+                    <textarea
+                      name="customerAddress"
+                      value={formData.customerAddress}
                       onChange={handleFormChange}
+                      rows="2"
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    >
-                      <option value="customer">Customer</option>
-                      <option value="staff">Staff</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                    ></textarea>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Customer Type</label>
                     <select
-                      name="status"
-                      value={formData.status}
+                      name="customerType"
+                      value={formData.customerType}
                       onChange={handleFormChange}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
+                      <option value="New">New</option>
+                      <option value="Regular">Regular</option>
+                      <option value="Premium">Premium</option>
                     </select>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="status"
+                      name="status"
+                      checked={formData.status}
+                      onChange={handleFormChange}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="status" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                      Active
+                    </label>
                   </div>
                 </div>
 
                 <div className="flex justify-end space-x-2 mt-6">
                   <button
                     type="button"
-                    onClick={() => setShowAddUserModal(false)}
+                    onClick={() => setShowAddCustomerModal(false)}
+                    disabled={loading}
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    disabled={loading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-400 disabled:cursor-not-allowed"
                   >
-                    Add User
+                    {loading ? (
+                      <span className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Saving...
+                      </span>
+                    ) : (
+                      'Add Customer'
+                    )}
                   </button>
                 </div>
               </form>
@@ -649,21 +904,37 @@ export default function AdminUsers() {
         </div>
       )}
 
-      {/* Edit User Modal */}
-      {showEditUserModal && currentUser && (
+      {/* Edit Customer Modal */}
+      {showEditCustomerModal && currentCustomer && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-md">
             <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Edit User</h2>
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">Edit Customer</h2>
+              
+              {error && (
+                <div className="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 rounded-md">
+                  {error}
+                </div>
+              )}
 
-              <form onSubmit={handleUpdateUser}>
+              <form onSubmit={handleUpdateCustomer}>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Customer ID</label>
                     <input
                       type="text"
-                      name="name"
-                      value={formData.name}
+                      value={currentCustomer.customerId}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white bg-gray-100 dark:bg-gray-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Customer Name</label>
+                    <input
+                      type="text"
+                      name="customerName"
+                      value={formData.customerName}
                       onChange={handleFormChange}
                       required
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -683,42 +954,53 @@ export default function AdminUsers() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mobile</label>
                     <input
                       type="tel"
-                      name="phone"
-                      value={formData.phone}
+                      name="mobile"
+                      value={formData.mobile}
                       onChange={handleFormChange}
-                      required
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
-                    <select
-                      name="role"
-                      value={formData.role}
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Address</label>
+                    <textarea
+                      name="customerAddress"
+                      value={formData.customerAddress}
                       onChange={handleFormChange}
+                      rows="2"
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    >
-                      <option value="customer">Customer</option>
-                      <option value="staff">Staff</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                    ></textarea>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Customer Type</label>
                     <select
-                      name="status"
-                      value={formData.status}
+                      name="customerType"
+                      value={formData.customerType}
                       onChange={handleFormChange}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
+                      <option value="New">New</option>
+                      <option value="Regular">Regular</option>
+                      <option value="Premium">Premium</option>
                     </select>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="editStatus"
+                      name="status"
+                      checked={formData.status}
+                      onChange={handleFormChange}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="editStatus" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                      Active
+                    </label>
                   </div>
                 </div>
 
@@ -726,18 +1008,30 @@ export default function AdminUsers() {
                   <button
                     type="button"
                     onClick={() => {
-                      setShowEditUserModal(false)
-                      setCurrentUser(null)
+                      setShowEditCustomerModal(false)
+                      setCurrentCustomer(null)
                     }}
+                    disabled={loading}
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    disabled={loading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-400 disabled:cursor-not-allowed"
                   >
-                    Update User
+                    {loading ? (
+                      <span className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Updating...
+                      </span>
+                    ) : (
+                      'Update Customer'
+                    )}
                   </button>
                 </div>
               </form>
@@ -748,4 +1042,3 @@ export default function AdminUsers() {
     </div>
   )
 }
-

@@ -47,6 +47,7 @@ export default function AddProduct() {
     model: "",    // Add the model field
     categoryId: "",
     subCategoryId: "",
+    subCategoryPath: [], // New field to track nested subcategory selections
     brandId: "",
     unitId: "",
     originalPrice: "",
@@ -70,9 +71,10 @@ export default function AddProduct() {
     vatEnable: false,
     vatType: "Percentage",
     vatAmount: "0",
+    shippingEnabled: false, // Add this flag
+    shippingCost: "0",
     warranty: "",
     safetyWarnings: "",
-    shippingCost: "0",
     metaTitle: "",
     metaDescription: "",
     metaKeywords: "",
@@ -1131,16 +1133,18 @@ const validateForm = () => {
 
 <form onSubmit={handleSubmit}>
   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <BasicInformation
-      formData={formData}
-      handleChange={handleChange}
-      categories={categories}
-      subcategories={subcategories}
-      brands={brands}
-      units={units}
-      errors={errors}
-      selectedCategoryId={selectedCategoryId}
-    />
+  <BasicInformation
+        formData={formData}
+        handleChange={handleChange}
+        categories={categories}
+        subcategories={subcategories}
+        setSubcategories={setSubcategories} 
+        fetchSubcategories={fetchSubcategories}
+        brands={brands}
+        units={units}
+        errors={errors}
+        selectedCategoryId={formData.categoryId}
+      />
     {/* Change Pricing component title to indicate optional */}
     {/* <div className="md:col-span-1 border border-gray-200 dark:border-gray-700 rounded-md p-5">
       <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
@@ -1187,18 +1191,12 @@ const validateForm = () => {
       onToggleEnabled={toggleVariantsEnabled}
     />
     
-    {/* Change VatAndShipping component title to indicate optional */}
-    <div className="md:col-span-1 border border-gray-200 dark:border-gray-700 rounded-md p-5">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-        VAT and Shipping <span className="text-sm font-normal text-gray-500">(Optional)</span>
-      </h2>
       <VatAndShipping
         formData={formData}
         handleChange={handleChange}
         errors={errors}
         optional={true}
       />
-    </div>
     
     <WarrantyAndSafety
       formData={formData}
