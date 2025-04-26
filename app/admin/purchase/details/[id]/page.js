@@ -33,7 +33,7 @@ export default function PurchaseDetailsPage({ params }) {
         throw new Error("Authentication token is missing")
       }
       
-      const response = await fetch(`/api/proxy/api/purchase`, {
+      const response = await fetch(`/api/proxy/api/v1/purchase`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

@@ -56,7 +56,7 @@ export default function AddPurchasePage() {
         throw new Error("Authentication token is missing")
       }
       
-      const response = await fetch(`/api/proxy/api/purchase/${id}`, {
+      const response = await fetch(`/api/proxy/api/v1/purchase/${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -426,8 +426,8 @@ export default function AddPurchasePage() {
       
       // Determine URL and method based on edit or add
       const url = isEditMode 
-        ? `/api/proxy/api/purchase/${formData.purchaseId}`
-        : "/api/proxy/api/purchase"
+        ? `/api/proxy/api/v1/purchase/${formData.purchaseId}`
+        : "/api/proxy/api/v1/purchase"
       const method = isEditMode ? "PUT" : "POST"
       
       // Send the API request with improved error handling

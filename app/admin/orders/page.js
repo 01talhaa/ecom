@@ -656,25 +656,28 @@ export default function AdminOrders() {
     return product ? product.productName : `Product #${productId}`
   }
 
-  // Get status badge class
-  const getStatusBadgeClass = (status) => {
-    if (!status) return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
-    
-    switch (status.toLowerCase()) {
-      case "delivered":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-      case "processing":
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-      case "shipped":
-        return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-      case "cancelled":
-        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-      case "pending":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-      default:
-        return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
-    }
+const getStatusBadgeClass = (status) => {
+  // Make sure status is a string and not null/undefined
+  if (!status) return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300";
+  
+  // Convert to string if it's not already, then lowercase
+  const statusStr = String(status).toLowerCase();
+  
+  switch (statusStr) {
+    case "delivered":
+      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+    case "processing":
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+    case "shipped":
+      return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
+    case "cancelled":
+      return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+    case "pending":
+      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
+    default:
+      return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300";
   }
+};
 
   if (loading && orders.length === 0) {
     return (
@@ -879,7 +882,7 @@ export default function AdminOrders() {
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {filteredOrders.length === 0 ? (
-              <tr>
+              <tr key="no-orders-row">
                 <td colSpan="7" className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                   No orders found. 
                   {searchTerm || filterOptions.status || filterOptions.paymentMethod || filterOptions.dateRange !== "all" 
@@ -889,7 +892,8 @@ export default function AdminOrders() {
               </tr>
             ) : (
               sortedOrders.map((order) => (
-                <tr key={order.orderId} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                // Ensure each order has a unique key - use orderId if available, or fallback to index
+                <tr key={order.orderId || `order-${order.id || Math.random()}`} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                     #{order.orderId}
                   </td>

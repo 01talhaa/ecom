@@ -67,7 +67,7 @@ export default function Branches() {
         throw new Error("Authentication token is missing");
       }
 
-      const response = await fetch(`/api/proxy/api/branches?page=${currentPage}`, {
+      const response = await fetch(`/api/proxy/api/v1/branches?page=${currentPage}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -102,7 +102,7 @@ export default function Branches() {
         throw new Error("Authentication token is missing");
       }
 
-      const response = await fetch(`/api/proxy/api/branches/${branchId}`, {
+      const response = await fetch(`/api/proxy/api/v1/branches/${branchId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -152,7 +152,7 @@ export default function Branches() {
         throw new Error("Authentication token is missing");
       }
 
-      const response = await fetch("/api/proxy/api/branches", {
+      const response = await fetch("/api/proxy/api/v1/branches", {
         method: "POST",
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -202,7 +202,7 @@ export default function Branches() {
         throw new Error("Authentication token is missing");
       }
 
-      const response = await fetch(`/api/proxy/api/branches/${currentBranch.branchId}`, {
+      const response = await fetch(`/api/proxy/api/v1/branches/${currentBranch.branchId}`, {
         method: "PUT",
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -247,7 +247,7 @@ export default function Branches() {
           throw new Error("Authentication token is missing");
         }
 
-        const response = await fetch(`/api/proxy/api/branches/${branchId}`, {
+        const response = await fetch(`/api/proxy/api/v1/branches/${branchId}`, {
           method: "DELETE",
           headers: {
             'Authorization': `Bearer ${token}`,

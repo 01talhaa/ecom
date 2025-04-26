@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { getProducts } from "@/lib/api"
 import { Search, Filter, AlertTriangle, ArrowUpDown, Plus, Minus } from "lucide-react"
 import Image from "next/image"
+import { useAuth } from "@/context/AuthContext"; // Add this import at the top
 
 export default function InventoryManagement() {
   const [products, setProducts] = useState([])
@@ -25,6 +26,8 @@ export default function InventoryManagement() {
     brand: "",
   })
   const [showFilters, setShowFilters] = useState(false)
+
+  const { getAuthToken } = useAuth(); // Add this inside the component function
 
   useEffect(() => {
     async function fetchProducts() {
@@ -103,29 +106,72 @@ export default function InventoryManagement() {
     setShowAdjustStock(true)
   }
 
-  const handleStockAdjustmentSubmit = (e) => {
-    e.preventDefault()
-
-    // In a real app, you would call an API to update the stock
-    const updatedProducts = products.map((product) => {
-      if (product.ProductId === currentProduct.ProductId) {
-        const newStock =
-          adjustmentType === "add"
-            ? product.StockQuantity + Number.parseInt(adjustmentQuantity)
-            : Math.max(0, product.StockQuantity - Number.parseInt(adjustmentQuantity))
-
-        return {
-          ...product,
-          StockQuantity: newStock,
-        }
+  const handleStockAdjustmentSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error("Authentication token is missing");
       }
-      return product
-    })
-
-    setProducts(updatedProducts)
-    setShowAdjustStock(false)
-    setCurrentProduct(null)
-  }
+      
+      // Prepare the payload according to API requirements
+      const payload = {
+        productId: currentProduct.ProductId,
+        productVariantId: 0, // Update this if you have variant information
+        adjustmentType: adjustmentType, // "add" or "remove"
+        quantity: parseInt(adjustmentQuantity, 10)
+      };
+      
+      // Call the stock adjustment API
+      const response = await fetch("/api/proxy/api/v1/adjuststock", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update the local state to reflect the change
+        setProducts(products.map((product) => {
+          if (product.ProductId === currentProduct.ProductId) {
+            const newStock = 
+              adjustmentType === "add"
+                ? product.StockQuantity + parseInt(adjustmentQuantity, 10)
+                : Math.max(0, product.StockQuantity - parseInt(adjustmentQuantity, 10));
+                
+            return {
+              ...product,
+              StockQuantity: newStock
+            };
+          }
+          return product;
+        }));
+        
+        // Show success notification (you could add a toast notification here)
+        console.log("Stock adjusted successfully:", result.message);
+        
+        // Close the modal
+        setShowAdjustStock(false);
+        setCurrentProduct(null);
+      } else {
+        throw new Error(result.message || "Failed to adjust stock");
+      }
+    } catch (error) {
+      console.error("Error adjusting stock:", error);
+      // Show error notification (you could add a toast notification here)
+      alert(`Error: ${error.message || "Failed to adjust stock"}`);
+    }
+  };
 
   // Handle filter change
   const handleFilterChange = (e) => {

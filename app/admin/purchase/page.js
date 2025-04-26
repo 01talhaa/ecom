@@ -57,7 +57,7 @@ export default function PurchasePage() {
       }
 
       const response = await fetch(
-        `/api/proxy/api/purchase?page=${page}&limit=${limit}`,
+        `/api/proxy/api/v1/purchase?page=${page}&limit=${limit}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -130,7 +130,7 @@ export default function PurchasePage() {
         throw new Error("Authentication token is missing");
       }
 
-      const response = await fetch(`/api/proxy/api/purchase/${vendorId}`, {
+      const response = await fetch(`/api/proxy/api/v1/purchase/${vendorId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,

@@ -1,46 +1,52 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Package,
   ShoppingCart,
   Users,
+  User, // For single user/customer
+  Shield, // For permissions/security
+  KeyRound, // Alternative for permissions
   BarChart3,
   Settings,
   ChevronDown,
   FileText,
   ShoppingBag,
   Building,
-  Tag // Add Tag icon for Titles
-} from "lucide-react"
+  Tag,
+  UserCog, // For user management
+} from "lucide-react";
 
 export default function AdminSidebar() {
-  const pathname = usePathname()
+  const pathname = usePathname();
   const [openMenus, setOpenMenus] = useState({
     products: true,
     inventory: false,
     sales: false,
     branches: false,
-  })
+  });
 
   const toggleMenu = (menu) => {
     setOpenMenus((prev) => ({
       ...prev,
       [menu]: !prev[menu],
-    }))
-  }
+    }));
+  };
 
   const isActive = (path) => {
-    return pathname === path
-  }
+    return pathname === path;
+  };
 
   return (
     <div className="w-60 h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-y-auto fixed">
       <div className="p-3 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Admin Panel</h2>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+          Admin Panel
+        </h2>
       </div>
 
       <nav className="p-3">
@@ -64,8 +70,8 @@ export default function AdminSidebar() {
             <button
               onClick={() => toggleMenu("products")}
               className={`flex items-center justify-between w-full p-2 rounded-md text-left text-sm ${
-                pathname.includes("/admin/products") || 
-                pathname.includes("/admin/categories") || 
+                pathname.includes("/admin/products") ||
+                pathname.includes("/admin/categories") ||
                 pathname.includes("/admin/brands") ||
                 pathname.includes("/admin/units") ||
                 pathname.includes("/admin/titles")
@@ -77,7 +83,11 @@ export default function AdminSidebar() {
                 <Package className="w-4 h-4 mr-2" />
                 Products
               </div>
-              <ChevronDown className={`w-3 h-3 transition-transform ${openMenus.products ? "rotate-180" : ""}`} />
+              <ChevronDown
+                className={`w-3 h-3 transition-transform ${
+                  openMenus.products ? "rotate-180" : ""
+                }`}
+              />
             </button>
             {openMenus.products && (
               <ul className="pl-8 mt-1 space-y-1">
@@ -166,7 +176,8 @@ export default function AdminSidebar() {
             <button
               onClick={() => toggleMenu("inventory")}
               className={`flex items-center justify-between w-full p-2 rounded-md text-left text-sm ${
-                pathname.includes("/admin/inventory") || pathname.includes("/admin/vendors")
+                pathname.includes("/admin/inventory") ||
+                pathname.includes("/admin/vendors")
                   ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
                   : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
               }`}
@@ -175,7 +186,11 @@ export default function AdminSidebar() {
                 <BarChart3 className="w-4 h-4 mr-2" />
                 Inventory
               </div>
-              <ChevronDown className={`w-3 h-3 transition-transform ${openMenus.inventory ? "rotate-180" : ""}`} />
+              <ChevronDown
+                className={`w-3 h-3 transition-transform ${
+                  openMenus.inventory ? "rotate-180" : ""
+                }`}
+              />
             </button>
             {openMenus.inventory && (
               <ul className="pl-8 mt-1 space-y-1">
@@ -257,7 +272,11 @@ export default function AdminSidebar() {
                 <ShoppingBag className="w-4 h-4 mr-2" />
                 Sales
               </div>
-              <ChevronDown className={`w-3 h-3 transition-transform ${openMenus.sales ? "rotate-180" : ""}`} />
+              <ChevronDown
+                className={`w-3 h-3 transition-transform ${
+                  openMenus.sales ? "rotate-180" : ""
+                }`}
+              />
             </button>
             {openMenus.sales && (
               <ul className="pl-8 mt-1 space-y-1">
@@ -315,7 +334,11 @@ export default function AdminSidebar() {
                 <Building className="w-4 h-4 mr-2" />
                 Branches
               </div>
-              <ChevronDown className={`w-3 h-3 transition-transform ${openMenus.branches ? "rotate-180" : ""}`} />
+              <ChevronDown
+                className={`w-3 h-3 transition-transform ${
+                  openMenus.branches ? "rotate-180" : ""
+                }`}
+              />
             </button>
             {openMenus.branches && (
               <ul className="pl-8 mt-1 space-y-1">
@@ -398,6 +421,21 @@ export default function AdminSidebar() {
             </Link>
           </li>
 
+          {/* Customers */}
+          <li>
+            <Link
+              href="/admin/customers"
+              className={`flex items-center p-2 rounded-md text-sm ${
+                isActive("/admin/customers")
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                  : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+              }`}
+            >
+              <User className="w-4 h-4 mr-2" />
+              Customers
+            </Link>
+          </li>
+
           {/* Users */}
           <li>
             <Link
@@ -408,8 +446,23 @@ export default function AdminSidebar() {
                   : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
               }`}
             >
-              <Users className="w-4 h-4 mr-2" />
+              <UserCog className="w-4 h-4 mr-2" />
               Users
+            </Link>
+          </li>
+
+          {/* Permissions */}
+          <li>
+            <Link
+              href="/admin/permissions"
+              className={`flex items-center p-2 rounded-md text-sm ${
+                isActive("/admin/permissions")
+                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                  : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+              }`}
+            >
+              <Shield className="w-4 h-4 mr-2" />
+              Permissions
             </Link>
           </li>
 
@@ -445,5 +498,5 @@ export default function AdminSidebar() {
         </ul>
       </nav>
     </div>
-  )
+  );
 }
