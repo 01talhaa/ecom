@@ -1,14 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { use } from "react"
 import Link from "next/link"
 import { ArrowLeft, Loader2, AlertCircle, RefreshCw, Mail, Phone, MapPin, Calendar, FileText, Tag } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { toast } from "react-hot-toast"
-import { use } from 'react' // Add this import
 
 export default function PurchaseDetailsPage({ params }) {
-  // Fix the params unwrapping using React.use()
+  // Properly unwrap params using React.use()
   const unwrappedParams = use(params)
   const vendorId = unwrappedParams.id
   
@@ -71,6 +71,7 @@ export default function PurchaseDetailsPage({ params }) {
 
   // Format date for display
   const formatDate = (dateString) => {
+    if (!dateString) return "-";
     const date = new Date(dateString)
     return date.toLocaleDateString('en-US', {
       year: 'numeric', 
@@ -81,6 +82,7 @@ export default function PurchaseDetailsPage({ params }) {
 
   // Format currency for display
   const formatCurrency = (amount) => {
+    if (amount === undefined || amount === null) return formatCurrency(0);
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'BDT',
@@ -239,7 +241,7 @@ export default function PurchaseDetailsPage({ params }) {
         
         {vendorDetails.purchaseDetails && vendorDetails.purchaseDetails.length > 0 ? (
           vendorDetails.purchaseDetails.map((purchase, index) => (
-            <div key={purchase.purchaseId} className="mb-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <div key={`purchase-${purchase.purchaseId}-${index}`} className="mb-6 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               <div className="bg-gray-50 dark:bg-gray-700 p-3">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                   <div>
@@ -300,10 +302,13 @@ export default function PurchaseDetailsPage({ params }) {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {purchase.purchaseChildren && purchase.purchaseChildren.map((item) => (
-                      <tr key={item.childId} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                    {purchase.purchaseChildren && purchase.purchaseChildren.map((item, itemIndex) => (
+                      <tr 
+                        key={`item-${purchase.purchaseId}-${item.childId}-${item.productId}-${itemIndex}`} 
+                        className="hover:bg-gray-50 dark:hover:bg-gray-750"
+                      >
                         <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-900 dark:text-gray-300">
-                          Product #{item.productId} {item.productName ? `(${item.productName})` : ""}
+                          Product #{item.productId}
                         </td>
                         <td className="px-2 py-1 whitespace-nowrap text-right text-xs text-gray-500 dark:text-gray-400">
                           {formatCurrency(item.purchasePrice)} <span className="text-[0.6rem]">x {item.conversionRate}</span>
@@ -315,7 +320,7 @@ export default function PurchaseDetailsPage({ params }) {
                           {formatCurrency(item.discount)}
                         </td>
                         <td className="px-2 py-1 whitespace-nowrap text-right text-xs font-medium text-gray-900 dark:text-white">
-                          {formatCurrency(item.subtotal)}
+                          {formatCurrency(item.receiveAmt)}
                         </td>
                       </tr>
                     ))}
@@ -348,7 +353,11 @@ export default function PurchaseDetailsPage({ params }) {
                         Total:
                       </td>
                       <td className="px-2 py-1 text-right text-xs font-bold text-gray-900 dark:text-white">
-                        {formatCurrency(purchase.purchaseChildren?.reduce((sum, item) => sum + (item.subtotal || 0), 0) + (purchase.additionalCharge || 0) - (purchase.overallDiscount || 0))}
+                        {formatCurrency(
+                          purchase.purchaseChildren?.reduce((sum, item) => sum + parseFloat(item.receiveAmt || 0), 0) + 
+                          parseFloat(purchase.additionalCharge || 0) - 
+                          parseFloat(purchase.overallDiscount || 0)
+                        )}
                       </td>
                     </tr>
                   </tbody>

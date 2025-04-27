@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { getProducts } from "@/lib/api"
 import { Search, Filter, AlertTriangle, ArrowUpDown, Plus, Minus } from "lucide-react"
 import Image from "next/image"
-import { useAuth } from "@/context/AuthContext"; // Add this import at the top
+import { useAuth } from "@/context/AuthContext"
 
 export default function InventoryManagement() {
   const [products, setProducts] = useState([])
@@ -27,17 +27,64 @@ export default function InventoryManagement() {
   })
   const [showFilters, setShowFilters] = useState(false)
 
-  const { getAuthToken } = useAuth(); // Add this inside the component function
+  const { getAuthToken } = useAuth()
+
+  // Move fetchProducts outside of useEffect so it can be called from elsewhere
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error("Authentication token is missing");
+      }
+      
+      // Use the adjuststock API to get current stock information
+      const response = await fetch("/api/proxy/api/v1/adjuststock", {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Format the data to match the structure our component expects
+        const formattedProducts = data.data.result.map(item => ({
+          ProductId: item.productId,
+          productName: item.productName || `Product #${item.productId}`,
+          CategoryName: item.categoryName || "Uncategorized",
+          BrandName: item.branchName || "Unbranded",
+          StockQuantity: item.balanceQty || 0,
+          Thumbnail: null, // API doesn't provide images
+          price: item.retailPrice,
+          barcode: item.barcode,
+          subcategory: item.subcategoryName,
+          variant: item.variantName,
+          branchId: item.branchId,
+          wSalePrice: item.wSalePrice
+        }));
+        
+        setProducts(formattedProducts);
+      } else {
+        throw new Error(data.message || "Failed to fetch products");
+      }
+    } catch (error) {
+      console.error("Error fetching products:", error);
+      // You might want to display an error message to the user
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function fetchProducts() {
-      setLoading(true)
-      const data = await getProducts()
-      setProducts(data)
-      setLoading(false)
-    }
-    fetchProducts()
-  }, [])
+    // Call the fetchProducts function when component mounts
+    fetchProducts();
+  }, []);
 
   // Get unique categories and brands for filters
   const categories = [...new Set(products.map((product) => product.CategoryName))]
@@ -141,28 +188,15 @@ export default function InventoryManagement() {
       const result = await response.json();
       
       if (result.success) {
-        // Update the local state to reflect the change
-        setProducts(products.map((product) => {
-          if (product.ProductId === currentProduct.ProductId) {
-            const newStock = 
-              adjustmentType === "add"
-                ? product.StockQuantity + parseInt(adjustmentQuantity, 10)
-                : Math.max(0, product.StockQuantity - parseInt(adjustmentQuantity, 10));
-                
-            return {
-              ...product,
-              StockQuantity: newStock
-            };
-          }
-          return product;
-        }));
-        
         // Show success notification (you could add a toast notification here)
         console.log("Stock adjusted successfully:", result.message);
         
         // Close the modal
         setShowAdjustStock(false);
         setCurrentProduct(null);
+        
+        // Now we can call fetchProducts since it's defined at component level
+        fetchProducts();
       } else {
         throw new Error(result.message || "Failed to adjust stock");
       }
